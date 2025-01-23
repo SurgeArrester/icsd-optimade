@@ -10,7 +10,7 @@ This repo contains prototyping work for creating an [OPTIMADE
 API](https://optimade.org) for searching and accessing structures
 from the [Inorganic Crystal Structure Database (ICSD)](https://icsd.fiz-karlsruhe.de).
 
-The structures are accessed via the [ICSD REST API 
+The structures are accessed via the [ICSD REST API
 ](https://icsd.fiz-karlsruhe.de/api) and cast to the
 OPTIMADE format; the
 [`optimade-maker`](https://github.com/materialscloud-org/optimade-maker/) and
@@ -24,7 +24,7 @@ After cloning this repository and using some appropriate method of creating a vi
 ```shell
 git clone git@github.com:datalab-industries/icsd-optimade
 cd icsd-optimade
-uv sync 
+uv sync
 ```
 
 or
