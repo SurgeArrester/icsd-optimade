@@ -1,0 +1,74 @@
+name: CI tests
+
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+    - 'push-action/**'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  LINTING_PY_VERSION: "3.11"  # The version of Python to use for linting (typically the minimum supported)
+
+# Cancel running workflows when additional changes are pushed
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#example-using-a-fallback-value
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - name: Set up Python ${{ env.LINTING_PY_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.LINTING_PY_VERSION }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "0.5.x"
+        enable-cache: true
+
+    - name: Install latest compatible versions of immediate dependencies
+      run: uv sync --all-extras
+
+    - name: Run pre-commit
+      run: uv run pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
+
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 2
+
+    - name: Set up Python ${{ env.LINTING_PY_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.LINTING_PY_VERSION }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "0.5.x"
+        enable-cache: true
+
+    - name: Install latest compatible versions of immediate dependencies
+      run: uv sync --all-extras
+
+    - name: Run tests
+      run: uv run pytest
