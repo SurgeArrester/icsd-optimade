@@ -5,8 +5,14 @@ import pytest
 from icsd_optimade.client import ICSDClient
 
 
-def test_login_credentials():
-    if not os.getenv("ICSD_LOGIN_ID") or not os.getenv("ICSD_LOGIN_PASSWORD"):
+def test_login_credentials(icsd_credentials, icsd_client):
+    if not icsd_credentials:
         pytest.skip("No ICSD credentials set.")
 
-    assert ICSDClient().login()
+    assert icsd_client.login()
+
+def test_date_range(icsd_credentials, icsd_client):
+    if not icsd_credentials:
+        pytest.skip("No ICSD credentials set.")
+
+    assert icsd_client.query_date_range((2020, 2021))
