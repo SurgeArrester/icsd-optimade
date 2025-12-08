@@ -86,7 +86,7 @@ def cli():
     with Pool(pool_size) as pool:
         with tqdm.tqdm(
             total=num_chunks * chunk_size,
-            desc=f"Processing CSD ({chunk_size=}, {pool_size=}",
+            desc=f"Processing ICSD ({chunk_size=}, {pool_size=}",
         ) as pbar:
             for chunk_id, total_count, bad_count in pool.imap_unordered(
                 partial(
