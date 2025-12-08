@@ -43,7 +43,7 @@ class ICSDClient:
         )
         if login_resp.status_code != 200:
             raise RuntimeError(
-                f"Failed to authenticate to ICSD at {self.base_url!r}: {login_resp.status_code=}. Please check your credentials."
+                f"Failed to authenticate to ICSD at {self.base_url!r}: {login_resp.status_code=}. Error returned: {login_resp.content}"
             )
         self.headers.pop("Content-Type")
         return login_resp.headers["icsd-auth-token"]
