@@ -2,15 +2,35 @@ from __future__ import annotations
 
 import glob
 import json
+import logging
 import os
 import tempfile
 from functools import partial
+from io import BytesIO
 from pathlib import Path
 
+import ase.io
 import tqdm
+from optimade.adapters import Structure
 from optimade_maker.convert import _construct_entry_type_info
 
 from .client import ICSDClient
+
+
+def map_cif_to_optimade(entry: int, client: ICSDClient):
+    # get cifs -> map cifs to OPTIMADE
+    cif_bytes = client.get_cif(entry)
+
+    try:
+        with BytesIO(cif_bytes) as fp:
+            atoms = ase.io.read(fp, format="cif")
+    except Exception as exc:
+        raise RuntimeError(f"Unable to convert CIF to ASE atoms: {exc}")
+
+    try:
+        return Structure.ingest_from(atoms)
+    except Exception as exc:
+        raise RuntimeError(f"Unable to convert ASE atoms to OPTIMADE structure: {exc}")
 
 
 def handle_chunk(
@@ -27,21 +47,20 @@ def handle_chunk(
     bad_count: int = 0
     total_count: int = 0
     str_chunk_id = f"{chunk_id:0{len(str(num_chunks))}d}"
+    log = logging.getLogger("ingest")
     with open(f"data/{run_name}-optimade-{str_chunk_id}.jsonl", "w") as f:
         try:
             for entry in chunk_ids:
-                # get cifs -> map cifs to OPTIMADE
-                _ = client.get_cif(entry)
                 # get references -> map references to OPTIMADE
+                optimade = map_cif_to_optimade(entry, client)
                 if isinstance(entry, Exception):
                     bad_count += 1
                     continue
                 else:
-                    f.write(str(entry) + "\n")
+                    f.write(str(optimade) + "\n")
                 total_count += 1
         except RuntimeError:
-            # The database iterator raises RuntimeError once we are out of bounds
-            pass
+            log.error(f"Bad entry: {entry}")
     if total_count == 0 and bad_count != 0:
         raise RuntimeError("No good entries found in chunk; something went wrong.")
 
