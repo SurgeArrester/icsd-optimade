@@ -12,6 +12,6 @@ def icsd_credentials():
 
 
 @pytest.fixture(scope="session")
-def icsd_client():
+def icsd_client(icsd_credentials):
     with ICSDClient() as client:
         yield client

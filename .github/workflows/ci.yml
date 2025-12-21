@@ -49,7 +49,6 @@ jobs:
 
   pytest:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
       with:
@@ -72,3 +71,6 @@ jobs:
 
     - name: Run tests
       run: uv run pytest
+      env:
+        ICSD_LOGIN_ID: ${{ secrets.ICSD_LOGIN_ID }}
+        ICSD_LOGIN_PASSWORD: ${{ secrets.ICSD_LOGIN_PASSWORD }}
