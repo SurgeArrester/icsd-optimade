@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 from pathlib import Path
@@ -131,7 +132,7 @@ class ICSDClient:
 
     def query_by_date_range(
         self,
-        date_range: tuple[int, int],
+        date_range: tuple[datetime.datetime, datetime.datetime] | tuple[int, int],
         date_field: Literal[
             "recordingdate", "publicationyear", "modificationdate"
         ] = "recordingdate",
@@ -149,7 +150,14 @@ class ICSDClient:
         if date_range[0] == date_range[1]:
             raise RuntimeError("Date range must be a range, not a single date.")
 
-        _date_range = sorted(date_range)
+        _date_range = sorted(date_range)  # type: ignore
+
+        if isinstance(_date_range[0], datetime.datetime) and isinstance(
+            _date_range[1], datetime.datetime
+        ):
+            _date_range = (_date_range[0].isoformat(), _date_range[1].isoformat())  # type: ignore
+
+        _date_range = (str(_date_range[0]), str(_date_range[1]))  # type: ignore
 
         query = f"{date_field}: {_date_range[0]}-{_date_range[1]}"
         results = self.query_entries(query)
