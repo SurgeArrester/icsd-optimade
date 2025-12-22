@@ -87,7 +87,10 @@ class ICSDClient:
         if owns_lock:
             log.error("Rotating ICSD session key")
             # One PID can now clear the session and create a new one
-            self.logout()
+            try:
+                self.logout()
+            except RuntimeError:
+                pass
             if self._cached_token_path.is_file():
                 self._cached_token_path.unlink()
 
