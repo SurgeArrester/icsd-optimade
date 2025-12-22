@@ -36,10 +36,16 @@ def _check_cif_cache(entry: int) -> bytes | None:
     return None
 
 
-def map_cif_to_optimade(entry: int, client: ICSDClient) -> str:
+def map_cif_to_optimade(entry: int, client: ICSDClient) -> str | RuntimeError:
     """For a given ICSD entry ID (CollCode), either look up a cached
     copy of the CIF or download from the ICSD API and map it into an OPTIMADE
     Structure resource via ASE, returning a JSON string of the structure.
+
+    Returns:
+        A JSON string representing the structure, or a RuntimeError if the parsing failed.
+
+    Raises:
+        Forbidden: If the CIF download failed for rate-limit reasons.
 
     """
 
@@ -53,12 +59,17 @@ def map_cif_to_optimade(entry: int, client: ICSDClient) -> str:
         with BytesIO(cif_bytes) as fp:
             atoms = ase.io.read(fp, format="cif")
     except Exception as exc:
-        raise RuntimeError(f"Unable to convert CIF to ASE atoms: {exc}")
+        return RuntimeError(f"Unable to convert CIF to ASE atoms: {exc}")
 
     try:
-        return Structure.ingest_from(atoms)
+        structure = Structure.ingest_from(atoms)
     except Exception as exc:
-        raise RuntimeError(f"Unable to convert ASE atoms to OPTIMADE structure: {exc}")
+        return RuntimeError(f"Unable to convert ASE atoms to OPTIMADE structure: {exc}")
+
+    entry = structure.entry.model_dump()
+    # ASE spg cannot be serialized as JSON, first just take the number
+    entry["attributes"]["_ase_spacegroup"] = entry["attributes"]["_ase_spacegroup"].no  # type: ignore
+    return json.dumps(entry)
 
 
 def handle_chunk(
