@@ -16,10 +16,38 @@ from optimade_maker.convert import _construct_entry_type_info
 
 from .client import ICSDClient
 
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "cifs"
 
-def map_cif_to_optimade(entry: int, client: ICSDClient):
-    # get cifs -> map cifs to OPTIMADE
-    cif_bytes = client.get_cif(entry)
+
+def _check_cif_cache(entry: int) -> bytes | None:
+    """Check if the CIF with CollCode `entry` is already stored on disk."""
+
+    entry_str = str(entry)
+    # Pad short entry IDs with zeros
+    if len(entry_str) < 2:
+        entry_str = f"0{entry_str}"
+
+    entry_path = DATA_DIR / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
+    entry_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if entry_path.is_file():
+        return entry_path.read_bytes()
+
+    return None
+
+
+def map_cif_to_optimade(entry: int, client: ICSDClient) -> str:
+    """For a given ICSD entry ID (CollCode), either look up a cached
+    copy of the CIF or download from the ICSD API and map it into an OPTIMADE
+    Structure resource via ASE, returning a JSON string of the structure.
+
+    """
+
+    # First check for cached CIF on disk
+    cif_bytes = _check_cif_cache(entry)
+
+    if not cif_bytes:
+        cif_bytes = client.get_cif(entry)
 
     try:
         with BytesIO(cif_bytes) as fp:
