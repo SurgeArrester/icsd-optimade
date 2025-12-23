@@ -48,6 +48,11 @@ class ICSDClient:
         self._ctime = datetime.datetime.now()
         self._cifs_downloaded: int = 0
 
+        # Clear up stale locks
+        lock = Path(".icsd-session.lock")
+        if lock.is_file():
+            lock.unlink()
+
         if not self.icsd_login_id or not self.icsd_login_password:
             raise RuntimeError(
                 "No ICSD user credentials found, please set the `ICSD_LOGIN_ID` and `ICSD_LOGIN_PASSWORD` environment variables."
