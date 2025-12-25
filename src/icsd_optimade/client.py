@@ -192,12 +192,14 @@ class ICSDClient:
                     retries += 1
                     continue
 
-                self._cifs_downloaded += 1
+                if response.status_code == 200:
+                    self._cifs_downloaded += 1
+
                 return response.content
 
         self._limit_reached = True
         raise Forbidden(
-            "CIF download limit reached: [{response.status_code}] - {response.content}"
+            "CIF download limit ({self._cifs_downloaded}) reached: [{response.status_code}] - {response.content}"
         )
 
     def get_reference(self, identifier: str) -> str:
