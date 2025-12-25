@@ -28,16 +28,19 @@ console_handler.setFormatter(
 log.addHandler(console_handler)
 
 
-def _check_cif_cache(entry: int) -> bytes | None:
-    """Check if the CIF with CollCode `entry` is already stored on disk."""
-
+def _get_cif_cache_path(entry: int) -> Path:
     entry_str = str(entry)
     # Pad short entry IDs with zeros
     if len(entry_str) < 2:
         entry_str = f"0{entry_str}"
 
-    entry_path = DATA_DIR / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
-    entry_path.parent.mkdir(parents=True, exist_ok=True)
+    return DATA_DIR / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
+
+
+def _check_cif_cache(entry: int) -> bytes | None:
+    """Check if the CIF with CollCode `entry` is already stored on disk."""
+
+    entry_path = _get_cif_cache_path(entry)
 
     if entry_path.is_file():
         return entry_path.read_bytes()
@@ -45,7 +48,7 @@ def _check_cif_cache(entry: int) -> bytes | None:
     return None
 
 
-def map_cif_to_optimade(entry: int, client: ICSDClient) -> str | RuntimeError:
+def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError:
     """For a given ICSD entry ID (CollCode), either look up a cached
     copy of the CIF or download from the ICSD API and map it into an OPTIMADE
     Structure resource via ASE, returning a JSON string of the structure.
@@ -59,10 +62,16 @@ def map_cif_to_optimade(entry: int, client: ICSDClient) -> str | RuntimeError:
     """
 
     # First check for cached CIF on disk
-    cif_bytes = _check_cif_cache(entry)
+    cif_bytes = _check_cif_cache(entry_id)
 
     if not cif_bytes:
-        cif_bytes = client.get_cif(entry)
+        cif_bytes = client.get_cif(entry_id)
+        entry_path = _get_cif_cache_path(entry_id)
+        entry_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(entry_path, "wb") as f:
+            f.write(cif_bytes)
+
+        log.error("Wrote %s to %s", entry_id, entry_path)
 
     try:
         with BytesIO(cif_bytes) as fp:
