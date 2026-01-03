@@ -69,6 +69,7 @@ class ICSDClient:
         self.logout()
 
     def logout(self):
+        self.headers.pop("Accept", None)
         logout_resp = self.session.get(f"{self.base_url}/auth/logout")
         if logout_resp.status_code != 200:
             raise RuntimeError(
@@ -113,6 +114,7 @@ class ICSDClient:
         """Login with user credentials and return the ICSD auth token."""
 
         # Check for pre-existing sessions
+        self.headers.pop("Accept", None)
         auth_token = os.getenv("ICSD_AUTH_TOKEN")
         if auth_token:
             log.debug(f"Trying pre-existing session from env var {auth_token}")
