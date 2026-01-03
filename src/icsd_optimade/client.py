@@ -219,7 +219,7 @@ class ICSDClient:
 
     def query_by_date_range(
         self,
-        date_range: tuple[datetime.datetime, datetime.datetime] | tuple[int, int],
+        date_range: tuple[datetime.date, datetime.date] | tuple[int, int],
         date_field: Literal[
             "recordingdate", "publicationyear", "modificationdate"
         ] = "recordingdate",

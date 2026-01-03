@@ -60,7 +60,7 @@ def handle_chunk(
         else:
             with open(f"data/{run_name}-optimade-{chunk[0].year}.jsonl", "w") as f:
                 for entry in entry_ids:
-                    optimade = map_cif_to_optimade(entry, client)
+                    optimade = map_cif_to_optimade(int(entry), client)
                     if isinstance(entry, Exception):
                         bad_count += 1
                         continue
