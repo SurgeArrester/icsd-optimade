@@ -3,93 +3,17 @@ from __future__ import annotations
 import datetime
 import glob
 import json
-import logging
 import os
 import tempfile
 from functools import partial
-from io import BytesIO
 from pathlib import Path
 
-import ase.io
 import tqdm
-from optimade.adapters import Structure
 from optimade_maker.convert import _construct_entry_type_info
 
 from .client import ICSDClient
-
-DATA_DIR = Path(__file__).parent.parent.parent / "data" / "cifs"
-
-log = logging.getLogger("ingest")
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(
-    logging.Formatter("%(asctime)s - [PID: %(process)d] - %(levelname)s - %(message)s")
-)
-log.addHandler(console_handler)
-
-
-def _get_cif_cache_path(entry: int) -> Path:
-    entry_str = str(entry)
-    # Pad short entry IDs with zeros
-    if len(entry_str) < 2:
-        entry_str = f"0{entry_str}"
-
-    return DATA_DIR / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
-
-
-def _check_cif_cache(entry: int) -> bytes | None:
-    """Check if the CIF with CollCode `entry` is already stored on disk."""
-
-    entry_path = _get_cif_cache_path(entry)
-
-    if entry_path.is_file():
-        return entry_path.read_bytes()
-
-    return None
-
-
-def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError:
-    """For a given ICSD entry ID (CollCode), either look up a cached
-    copy of the CIF or download from the ICSD API and map it into an OPTIMADE
-    Structure resource via ASE, returning a JSON string of the structure.
-
-    Returns:
-        A JSON string representing the structure, or a RuntimeError if the parsing failed.
-
-    Raises:
-        Forbidden: If the CIF download failed for rate-limit reasons.
-
-    """
-
-    # First check for cached CIF on disk
-    cif_bytes = _check_cif_cache(entry_id)
-
-    if not cif_bytes:
-        cif_bytes = client.get_cif(entry_id)
-        entry_path = _get_cif_cache_path(entry_id)
-        entry_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(entry_path, "wb") as f:
-            f.write(cif_bytes)
-
-        log.error("Wrote %s to %s", entry_id, entry_path)
-
-    try:
-        with BytesIO(cif_bytes) as fp:
-            atoms = ase.io.read(fp, format="cif")
-    except Exception as exc:
-        return RuntimeError(f"Unable to convert CIF to ASE atoms: {exc}")
-
-    try:
-        structure = Structure.ingest_from(atoms)
-    except Exception as exc:
-        return RuntimeError(f"Unable to convert ASE atoms to OPTIMADE structure: {exc}")
-
-    entry = structure.entry.model_dump()
-    entry["id"] = str(entry_id)
-    entry["attributes"]["immutable_id"] = str(entry_id)
-    # ASE spg cannot be serialized as JSON, first just take the number
-    entry["attributes"]["_ase_spacegroup"] = entry["attributes"]["_ase_spacegroup"].no  # type: ignore
-    return json.dumps(entry)
+from .mapper import map_cif_to_optimade
+from .utils import get_cif, setup_log
 
 
 def handle_chunk(
@@ -97,8 +21,21 @@ def handle_chunk(
     run_name: str = "test",
     num_chunks: int | None = None,
     client: ICSDClient | None = None,
+    download_only: bool = False,
 ):
-    """Handle a chunk of the ICSD database, logging bad entries and showing a progress bar."""
+    """Handle a chunk of the ICSD database, queried by date, logging bad entries and showing a progress bar.
+
+    Parameters:
+        chunk: A tuple of (start_date, end_date) defining the date range to process.
+        run_name: A name for this run, used in output file naming.
+        num_chunks: Total number of chunks being processed (for logging purposes).
+        client: An optional ICSDClient instance to use for querying and downloading.
+        download_only: If True, only download CIFs without mapping to OPTIMADE, caching them to disk.
+
+    """
+
+    log = setup_log("ingest")
+
     if client is None:
         client = ICSDClient()
 
@@ -107,7 +44,7 @@ def handle_chunk(
 
     entry_ids = client.query_by_date_range(chunk)
 
-    log.error(
+    log.info(
         "Queried date range %s, %s returned %s results",
         chunk[0],
         chunk[1],
@@ -115,22 +52,28 @@ def handle_chunk(
     )
 
     if entry_ids:
-        with open(f"data/{run_name}-optimade-{chunk[0].year}.jsonl", "w") as f:
+        if download_only:
             for entry in entry_ids:
-                optimade = map_cif_to_optimade(entry, client)
-                if isinstance(entry, Exception):
-                    bad_count += 1
-                    continue
-
-                else:
-                    f.write(str(optimade) + "\n")
-
+                get_cif(int(entry), client)
                 total_count += 1
 
-    if total_count == 0 and bad_count != 0:
-        raise RuntimeError(
-            "No good entries found in chunk {chunk}; something went wrong."
-        )
+        else:
+            with open(f"data/{run_name}-optimade-{chunk[0].year}.jsonl", "w") as f:
+                for entry in entry_ids:
+                    optimade = map_cif_to_optimade(entry, client)
+                    if isinstance(entry, Exception):
+                        bad_count += 1
+                        continue
+
+                    else:
+                        f.write(str(optimade) + "\n")
+
+                    total_count += 1
+
+            if total_count == 0 and bad_count != 0:
+                raise RuntimeError(
+                    "No good entries found in chunk {chunk}; something went wrong."
+                )
 
     return total_count, bad_count
 
@@ -143,6 +86,8 @@ def cli():
     parser.add_argument("--num-processes", type=int, default=4)
     parser.add_argument("--run-name", type=str, default="icsd")
     parser.add_argument("--combine-only", action="store_true")
+
+    log = setup_log("ingest")
 
     args = parser.parse_args()
 
@@ -159,12 +104,23 @@ def cli():
 
     icsd_client = ICSDClient()
 
+    chunk_processor = partial(
+        handle_chunk, run_name=run_name, client=icsd_client, download_only=True
+    )
+
+    with tqdm.tqdm(
+        desc="Downloading ICSD CIFs single-threaded",
+    ) as pbar:
+        for dates in date_ranges:
+            total_count, bad_count = chunk_processor(dates)
+            pbar.update(total_count)
+
     total_bad = 0
     total = 0
     if not args.combine_only:
         with Pool(pool_size) as pool:
             with tqdm.tqdm(
-                desc=f"Processing ICSD ({pool_size=}",
+                desc=f"Mapping ICSD to OPTIMADE ({pool_size=}",
             ) as pbar:
                 for total_count, bad_count in pool.imap_unordered(
                     partial(
