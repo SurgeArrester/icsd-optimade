@@ -59,12 +59,24 @@ def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError
     entry["id"] = str(id)
     entry["attributes"]["immutable_id"] = str(id)
 
-    entry["attributes"]["_cif_audit_creation_date"] = datetime.datetime.fromisoformat(
-        cif["_audit_creation_date"]
-    ).isoformat()
-    entry["attributes"]["last_modified"] = datetime.datetime.fromisoformat(
-        cif["_audit_update_record"]
-    ).isoformat()
+    def _isoformat(date_str: str | None) -> str | None:
+        if date_str is None:
+            return None
+
+        return datetime.datetime.fromisoformat(date_str).isoformat()
+
+    entry["attributes"]["last_modified"] = _isoformat(cif.get("_audit_update_record"))
+    entry["attributes"]["_cif_audit_creation_date"] = _isoformat(
+        cif.get("_audit_creation_date")
+    )
+
+    if (
+        entry["attributes"]["last_modified"] is None
+        and entry["attributes"]["_cif_audit_creation_date"] is not None
+    ):
+        entry["attributes"]["last_modified"] = entry["attributes"][
+            "_cif_audit_creation_date"
+        ]
 
     entry["attributes"]["space_group_it_number"] = cif["_space_group_it_number"]
     entry["attributes"]["_cif_cell_formula_units_Z"] = int(cif["_cell_formula_units_Z"])
