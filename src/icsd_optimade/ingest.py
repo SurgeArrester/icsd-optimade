@@ -72,6 +72,7 @@ def handle_chunk(
                     optimade = map_cif_to_optimade(int(entry), client)
                     if isinstance(entry, Exception):
                         bad_count += 1
+                        log.warning("Bad entry %s: %s", entry, optimade)
                         continue
 
                     else:
@@ -95,13 +96,15 @@ def cli():
     parser.add_argument("--num-processes", type=int, default=4)
     parser.add_argument("--run-name", type=str, default="icsd")
     parser.add_argument("--combine-only", action="store_true")
-
-    log = setup_log("ingest")
+    parser.add_argument("--log-level", type=str, default="WARNING")
 
     args = parser.parse_args()
 
     pool_size = args.num_processes
     run_name = args.run_name
+    log_level = args.log_level
+
+    log = setup_log("ingest", log_level=log_level)
 
     start_year = 1950
     end_year = datetime.datetime.today().year

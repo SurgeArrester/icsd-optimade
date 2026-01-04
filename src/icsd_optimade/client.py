@@ -8,14 +8,7 @@ from typing import Literal
 import httpx
 
 from icsd_optimade import __version__
-
-log = logging.getLogger("client")
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(
-    logging.Formatter("%(asctime)s - [PID: %(process)d] - %(levelname)s - %(message)s")
-)
-log.addHandler(console_handler)
+from icsd_optimade.utils import setup_log
 
 
 class Forbidden(RuntimeError): ...
@@ -46,6 +39,7 @@ class ICSDClient:
         self._limit_reached: bool = False
         self._ctime = datetime.datetime.now()
         self._cifs_downloaded: int = 0
+        self.log = setup_log("client", logging.ERROR)
 
         # Clear up stale locks
         lock = Path(".icsd-session.lock")
@@ -75,7 +69,7 @@ class ICSDClient:
             raise RuntimeError(
                 f"Failed to logout of ICSD session: {logout_resp.content}"
             )
-        log.error("Logged out of session")
+        self.log.info("Logged out of session")
 
     def rotate_session(self):
         """Attempt to rotate the session key in a parallel-safe way."""
@@ -88,7 +82,7 @@ class ICSDClient:
             owns_lock = True
 
         if owns_lock:
-            log.error("Rotating ICSD session key")
+            self.log.info("Rotating ICSD session key")
             # One PID can now clear the session and create a new one
             try:
                 self.logout()
@@ -101,7 +95,7 @@ class ICSDClient:
             lock.unlink()
 
         if not owns_lock:
-            log.error("Waiting for new session")
+            self.log.info("Waiting for new session")
             # Wait a bit for another process to finish locking and creating the session
             max_wait_seconds = 120
             wait_seconds = 0
@@ -117,13 +111,13 @@ class ICSDClient:
         self.headers.pop("Accept", None)
         auth_token = os.getenv("ICSD_AUTH_TOKEN")
         if auth_token:
-            log.debug(f"Trying pre-existing session from env var {auth_token}")
+            self.log.debug(f"Trying pre-existing session from env var {auth_token}")
 
         else:
             if self._cached_token_path.is_file():
                 with open(self._cached_token_path) as f:
                     auth_token = f.readlines()[0].strip()
-            log.debug(
+            self.log.debug(
                 f"Trying pre-existing session from path {self._cached_token_path}"
             )
 
@@ -133,7 +127,7 @@ class ICSDClient:
                 f"{self.base_url}/cif/0", headers={"icsd-auth-token": auth_token}
             )
             if check_auth.status_code == 404:
-                log.error(f"Using pre-existing login session {auth_token}")
+                self.log.info(f"Using pre-existing login session {auth_token}")
                 self.headers["icsd-auth-token"] = auth_token
                 return auth_token
 
@@ -152,7 +146,7 @@ class ICSDClient:
             f.write(token)
 
         self.headers["icsd-auth-token"] = token
-        log.error(f"Logged into session {token}")
+        self.log.info(f"Logged into session {token}")
         return token
 
     @property
@@ -185,7 +179,7 @@ class ICSDClient:
 
                 if response.status_code == 403:
                     sleep_time = 60 * 2**retries
-                    log.error(
+                    self.log.warning(
                         f"Hit 403 limit after {datetime.datetime.now() - self._ctime} on process {os.getpid()} -- {self._cifs_downloaded} CIFs downloaded. Process sleeping for %s minutes before retrying",
                         sleep_time / 60,
                     )

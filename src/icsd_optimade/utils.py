@@ -16,16 +16,17 @@ def setup_log(
 
     """
     log = logging.getLogger(log_name)
-    log.handlers = []
-    console_handler = logging.StreamHandler()
-    log.setLevel(log_level)
-    console_handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s - [PID: %(process)d] - %(levelname)s - %(message)s"
+    if not log.hasHandlers():
+        log.handlers = []
+        console_handler = logging.StreamHandler()
+        log.setLevel(log_level)
+        console_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - [PID: %(process)d] - %(levelname)s - %(message)s"
+            )
         )
-    )
-    console_handler.setLevel(log_level)
-    log.addHandler(console_handler)
+        console_handler.setLevel(log_level)
+        log.addHandler(console_handler)
     return log
 
 

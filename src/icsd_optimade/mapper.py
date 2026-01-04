@@ -88,6 +88,8 @@ def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError
         cif["_cell_angle_gamma"]
     )
 
+    # TODO: extract uncertainties for other float fields, and expose them as metadata
+
     ref_entry = {
         "id": id,
         "type": "references",
