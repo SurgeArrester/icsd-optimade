@@ -8,7 +8,7 @@ from optimade.adapters import Reference, Structure
 from optimade.models import Person
 
 from .client import ICSDClient
-from .utils import get_cif
+from .utils import get_cif, uncertain_float
 
 
 def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError:
@@ -67,14 +67,26 @@ def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError
     ).isoformat()
 
     entry["attributes"]["space_group_it_number"] = cif["_space_group_it_number"]
-    entry["attributes"]["_cif_cell_formula_units_Z"] = cif["_cell_formula_units_Z"]
-    entry["attributes"]["_cif_cell_length_a"] = cif["_cell_length_a"]
-    entry["attributes"]["_cif_cell_length_b"] = cif["_cell_length_b"]
-    entry["attributes"]["_cif_cell_length_c"] = cif["_cell_length_c"]
-    entry["attributes"]["_cif_cell_volume"] = cif["_cell_volume"]
-    entry["attributes"]["_cif_cell_angle_alpha"] = cif["_cell_angle_alpha"]
-    entry["attributes"]["_cif_cell_angle_beta"] = cif["_cell_angle_beta"]
-    entry["attributes"]["_cif_cell_angle_gamma"] = cif["_cell_angle_gamma"]
+    entry["attributes"]["_cif_cell_formula_units_Z"] = int(cif["_cell_formula_units_Z"])
+    entry["attributes"]["_cif_cell_length_a"], u = uncertain_float(
+        cif["_cell_length_a"]
+    )
+    entry["attributes"]["_cif_cell_length_b"], u = uncertain_float(
+        cif["_cell_length_b"]
+    )
+    entry["attributes"]["_cif_cell_length_c"], u = uncertain_float(
+        cif["_cell_length_c"]
+    )
+    entry["attributes"]["_cif_cell_volume"], u = uncertain_float(cif["_cell_volume"])
+    entry["attributes"]["_cif_cell_angle_alpha"], u = uncertain_float(
+        cif["_cell_angle_alpha"]
+    )
+    entry["attributes"]["_cif_cell_angle_beta"], u = uncertain_float(
+        cif["_cell_angle_beta"]
+    )
+    entry["attributes"]["_cif_cell_angle_gamma"], u = uncertain_float(
+        cif["_cell_angle_gamma"]
+    )
 
     ref_entry = {
         "id": id,

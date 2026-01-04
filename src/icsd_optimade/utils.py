@@ -66,3 +66,21 @@ def get_cif(entry_id: int, client) -> bytes:
         store_cif(entry_id, cif_bytes)
 
     return cif_bytes
+
+
+def uncertain_float(value: str) -> tuple[float, float | None]:
+    """Take a string representing a float optionally with uncertainty in parentheses,
+    and return the float value and its uncertainty as a tuple, with scaled uncertainty
+    set to None if not present.
+
+    Parameters:
+        value: A string representing a float, e.g., "1.234(5)" or "2.0".
+
+    """
+    if "(" in value:
+        base, uncertainty = value.split("(")
+        uncertainty = uncertainty.rstrip(")")
+        scale = 10 ** (-len(uncertainty))
+        return float(base), float(uncertainty) * scale
+    else:
+        return float(value), 0.0
