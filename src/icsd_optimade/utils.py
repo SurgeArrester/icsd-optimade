@@ -1,11 +1,13 @@
 import logging
+import typing
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data" / "cifs"
+if typing.TYPE_CHECKING:
+    from icsd_optimade.client import ICSDClient
 
 
 def setup_log(
-    log_name: str = "ingest", log_level: int = logging.INFO
+    log_name: str = "ingest", log_level: int | str = logging.INFO
 ) -> logging.Logger:
     """Return a named logger with a console handler that records
     timestamps and process IDs.
@@ -30,20 +32,20 @@ def setup_log(
     return log
 
 
-def _get_cif_cache_path(entry: int) -> Path:
+def _get_cif_cache_path(entry: int, data_dir: Path) -> Path:
     """Get the path to the cached CIF file for the given CollCode `entry`."""
     entry_str = str(entry)
     # Pad short entry IDs with zeros
     if len(entry_str) < 2:
         entry_str = f"0{entry_str}"
 
-    return DATA_DIR / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
+    return data_dir / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
 
 
-def check_cif_cache(entry: int) -> bytes | None:
+def check_cif_cache(entry: int, data_dir: Path) -> bytes | None:
     """Check if the CIF with CollCode `entry` is already stored on disk."""
 
-    entry_path = _get_cif_cache_path(entry)
+    entry_path = _get_cif_cache_path(entry, data_dir)
 
     if entry_path.is_file():
         return entry_path.read_bytes()
@@ -51,20 +53,37 @@ def check_cif_cache(entry: int) -> bytes | None:
     return None
 
 
-def store_cif(entry_id: int, cif_bytes: bytes) -> None:
-    entry_path = _get_cif_cache_path(entry_id)
+def store_cif(entry_id: int, cif_bytes: bytes, data_dir: Path) -> None:
+    """Store the CIF bytes for the given CollCode `entry_id` on disk.
+
+    Parameters:
+        entry_id: The ICSD CollCode of the CIF.
+        cif_bytes: The CIF data as bytes.
+        data_dir: Path to the data directory for storing CIFs.
+
+    """
+
+    entry_path = _get_cif_cache_path(entry_id, data_dir)
     entry_path.parent.mkdir(parents=True, exist_ok=True)
     with open(entry_path, "wb") as f:
         f.write(cif_bytes)
 
 
-def get_cif(entry_id: int, client) -> bytes:
-    # First check for cached CIF on disk
-    cif_bytes = check_cif_cache(entry_id)
+def get_cif(entry_id: int, client: "ICSDClient", data_dir: Path) -> bytes:
+    """Get the CIF bytes for the given CollCode `entry_id`, either from cache
+    or by downloading from the ICSD API.
+
+    Parameters:
+        entry_id: The ICSD CollCode of the desired CIF.
+        client: An instance of ICSDClient to use for downloading.
+        data_dir: Path to the data directory for storing CIFs.
+
+    """
+    cif_bytes = check_cif_cache(entry_id, data_dir)
 
     if not cif_bytes:
         cif_bytes = client.get_cif(entry_id)
-        store_cif(entry_id, cif_bytes)
+        store_cif(entry_id, cif_bytes, data_dir)
 
     return cif_bytes
 
@@ -83,5 +102,5 @@ def uncertain_float(value: str) -> tuple[float, float | None]:
         uncertainty = uncertainty.rstrip(")")
         scale = 10 ** (-len(uncertainty))
         return float(base), float(uncertainty) * scale
-    else:
-        return float(value), 0.0
+
+    return float(value), 0.0

@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 from functools import partial
+from multiprocessing import Pool
 from pathlib import Path
 
 import tqdm
@@ -18,6 +19,7 @@ from .utils import get_cif, setup_log
 
 def handle_chunk(
     chunk: tuple[datetime.date, datetime.date],
+    data_dir: Path,
     run_name: str = "test",
     num_chunks: int | None = None,
     client: ICSDClient | None = None,
@@ -27,6 +29,7 @@ def handle_chunk(
 
     Parameters:
         chunk: A tuple of (start_date, end_date) defining the date range to process.
+        data_dir: Path to the data directory for storing CIFs and outputs.
         run_name: A name for this run, used in output file naming.
         num_chunks: Total number of chunks being processed (for logging purposes).
         client: An optional ICSDClient instance to use for querying and downloading.
@@ -60,7 +63,7 @@ def handle_chunk(
         )
         if download_only:
             for entry in entry_ids:
-                get_cif(int(entry), client)
+                get_cif(int(entry), client, data_dir=data_dir)
                 total_count += 1
 
         else:
@@ -88,38 +91,51 @@ def handle_chunk(
     return total_count, bad_count
 
 
-def cli():
-    import argparse
-    from multiprocessing import Pool
+def ingest_by_year(
+    data_dir: Path,
+    start_year: int = 1950,
+    end_year: int | None = None,
+    pool_size: int = 1,
+    run_name: str = "icsd",
+    log_level: str = "WARNING",
+    skip_download: bool = False,
+    combine_only: bool = False,
+):
+    """Ingest ICSD data by year range, downloading CIFs and mapping to OPTIMADE format.
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--num-processes", type=int, default=4)
-    parser.add_argument("--run-name", type=str, default="icsd")
-    parser.add_argument("--combine-only", action="store_true")
-    parser.add_argument("--log-level", type=str, default="WARNING")
-    parser.add_argument("--skip-download", action="store_true")
+    Parameters:
+        start_year: The starting year for ingestion (inclusive).
+        end_year: The ending year for ingestion (exclusive). If None, defaults to current year.
+        data_dir: Path to the data directory for storing CIFs and outputs.
+        pool_size: Number of parallel processes to use for mapping.
+        run_name: A name for this run, used in output file naming.
+        log_level: Logging level as a string (e.g., "INFO", "DEBUG").
+        skip_download: If True, skip the download step and only combine existing files.
+        combine_only: If True, only combine existing mapped files without downloading or mapping.
 
-    args = parser.parse_args()
-
-    pool_size = args.num_processes
-    run_name = args.run_name
-    log_level = args.log_level
-    skip_download = args.skip_download
+    """
 
     log = setup_log("ingest", log_level=log_level)
 
-    start_year = 1950
-    end_year = datetime.datetime.today().year
+    if end_year is None:
+        end_year = datetime.datetime.today().year
 
     date_ranges = (
-        (datetime.date(year=i, month=1, day=1), datetime.date(year=i, month=12, day=31))
+        (
+            datetime.date(year=i, month=1, day=1),
+            datetime.date(year=i, month=12, day=31),
+        )
         for i in range(start_year, end_year)
     )
 
     icsd_client = ICSDClient()
 
     chunk_processor = partial(
-        handle_chunk, run_name=run_name, client=icsd_client, download_only=True
+        handle_chunk,
+        run_name=run_name,
+        data_dir=data_dir,
+        client=icsd_client,
+        download_only=True,
     )
 
     if not skip_download:
@@ -134,7 +150,7 @@ def cli():
 
     total_bad = 0
     total = 0
-    if not args.combine_only:
+    if not combine_only:
         with Pool(pool_size) as pool:
             with tqdm.tqdm(
                 desc=f"Mapping ICSD to OPTIMADE ({pool_size=}",
@@ -142,6 +158,7 @@ def cli():
                 for total_count, bad_count in pool.imap_unordered(
                     partial(
                         handle_chunk,
+                        data_dir=data_dir,
                         run_name=run_name,
                         client=icsd_client,
                         download_only=False,
@@ -165,7 +182,7 @@ def cli():
 
     pattern = f"{run_name}-optimade-*.jsonl"
     input_files = sorted(
-        glob.glob(os.path.join("data", pattern)),
+        glob.glob(os.path.join(str(data_dir), pattern)),
         key=lambda x: int(x.split("-")[-1].split(".")[0]),
     )
 
@@ -211,4 +228,34 @@ def cli():
     # Final scan to remove duplicates an empty lines
     print(
         f"Combined {len(input_files)} files into {output_file} (total size of file: {os.path.getsize(output_file) / 1024**2:.1f} MB)"
+    )
+
+
+def cli():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--num-processes", type=int, default=4)
+    parser.add_argument("--run-name", type=str, default="icsd")
+    parser.add_argument("--combine-only", action="store_true")
+    parser.add_argument("--log-level", type=str, default="WARNING")
+    parser.add_argument("--skip-download", action="store_true")
+
+    data_dir = Path(__file__).parent.parent.parent / "data"
+
+    args = parser.parse_args()
+
+    pool_size = args.num_processes
+    run_name = args.run_name
+    log_level = args.log_level
+    skip_download = args.skip_download
+    combine_only = args.combine_only
+
+    ingest_by_year(
+        pool_size=pool_size,
+        run_name=run_name,
+        log_level=log_level,
+        skip_download=skip_download,
+        combine_only=combine_only,
+        data_dir=data_dir,
     )
