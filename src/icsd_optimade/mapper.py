@@ -1,6 +1,7 @@
 import datetime
 import json
 from io import BytesIO
+from pathlib import Path
 
 import ase.io
 import CifFile
@@ -11,7 +12,9 @@ from .client import ICSDClient
 from .utils import get_cif, uncertain_float
 
 
-def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError:
+def map_cif_to_optimade(
+    entry_id: int, client: ICSDClient, data_dir: Path
+) -> str | RuntimeError:
     """For a given ICSD entry ID (CollCode), either look up a cached
     copy of the CIF or download from the ICSD API and map it into an OPTIMADE
     Structure resource via ASE, returning a JSON string of the structure.
@@ -24,7 +27,7 @@ def map_cif_to_optimade(entry_id: int, client: ICSDClient) -> str | RuntimeError
 
     """
 
-    cif_bytes = get_cif(entry_id, client)
+    cif_bytes = get_cif(entry_id, client, data_dir)
 
     try:
         with BytesIO(cif_bytes) as fp:

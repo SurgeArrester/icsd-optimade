@@ -39,7 +39,7 @@ def _get_cif_cache_path(entry: int, data_dir: Path) -> Path:
     if len(entry_str) < 2:
         entry_str = f"0{entry_str}"
 
-    return data_dir / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
+    return data_dir / "cifs" / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
 
 
 def check_cif_cache(entry: int, data_dir: Path) -> bytes | None:

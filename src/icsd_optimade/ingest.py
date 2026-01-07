@@ -72,7 +72,7 @@ def handle_chunk(
                     f"Mapping entries to OPTIMADE format and saving as {run_name}-optimade-{chunk[0].year}.jsonl"
                 )
                 for entry in entry_ids:
-                    optimade = map_cif_to_optimade(int(entry), client)
+                    optimade = map_cif_to_optimade(int(entry), client, data_dir)
                     if isinstance(entry, Exception):
                         bad_count += 1
                         log.warning("Bad entry %s: %s", entry, optimade)
@@ -117,8 +117,14 @@ def ingest_by_year(
 
     log = setup_log("ingest", log_level=log_level)
 
+    if not data_dir.is_dir():
+        data_dir.mkdir(parents=True, exist_ok=True)
+
     if end_year is None:
         end_year = datetime.datetime.today().year
+
+    if end_year == start_year:
+        end_year += 1
 
     date_ranges = (
         (
@@ -175,9 +181,10 @@ def ingest_by_year(
                         pbar.set_postfix({"% bad": "???"})
 
     # Combine all results into a single JSONL file, first temporary
-    output_file = f"{run_name}-optimade.jsonl"
+    output_filename = f"{run_name}-optimade.jsonl"
     tmp_dir = tempfile.TemporaryDirectory()
-    tmp_jsonl_path = Path(tmp_dir.name) / output_file
+    tmp_jsonl_path = Path(tmp_dir.name) / output_filename
+    output_file = data_dir / output_filename
     print(f"Collecting results into {output_file}")
 
     pattern = f"{run_name}-optimade-*.jsonl"
