@@ -42,8 +42,11 @@ def _get_cif_cache_path(entry: int, data_dir: Path) -> Path:
     return data_dir / "cifs" / entry_str[0] / entry_str[1] / f"{entry_str}.cif"
 
 
-def check_cif_cache(entry: int, data_dir: Path) -> bytes | None:
+def check_cif_cache(entry: int, data_dir: Path | None = None) -> bytes | None:
     """Check if the CIF with CollCode `entry` is already stored on disk."""
+
+    if data_dir is None:
+        return None
 
     entry_path = _get_cif_cache_path(entry, data_dir)
 
@@ -53,7 +56,7 @@ def check_cif_cache(entry: int, data_dir: Path) -> bytes | None:
     return None
 
 
-def store_cif(entry_id: int, cif_bytes: bytes, data_dir: Path) -> None:
+def store_cif(entry_id: int, cif_bytes: bytes, data_dir: Path | None = None) -> None:
     """Store the CIF bytes for the given CollCode `entry_id` on disk.
 
     Parameters:
@@ -63,13 +66,14 @@ def store_cif(entry_id: int, cif_bytes: bytes, data_dir: Path) -> None:
 
     """
 
-    entry_path = _get_cif_cache_path(entry_id, data_dir)
-    entry_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(entry_path, "wb") as f:
-        f.write(cif_bytes)
+    if data_dir:
+        entry_path = _get_cif_cache_path(entry_id, data_dir)
+        entry_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(entry_path, "wb") as f:
+            f.write(cif_bytes)
 
 
-def get_cif(entry_id: int, client: "ICSDClient", data_dir: Path) -> bytes:
+def get_cif(entry_id: int, client: "ICSDClient", data_dir: Path | None = None) -> bytes:
     """Get the CIF bytes for the given CollCode `entry_id`, either from cache
     or by downloading from the ICSD API.
 

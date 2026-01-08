@@ -13,11 +13,16 @@ from .utils import get_cif, uncertain_float
 
 
 def map_cif_to_optimade(
-    entry_id: int, client: ICSDClient, data_dir: Path
+    entry_id: int, client: ICSDClient, data_dir: Path | None = None
 ) -> str | RuntimeError:
     """For a given ICSD entry ID (CollCode), either look up a cached
     copy of the CIF or download from the ICSD API and map it into an OPTIMADE
     Structure resource via ASE, returning a JSON string of the structure.
+
+    Parameters:
+        entry_id: The ICSD CollCode of the desired structure.
+        client: An ICSDClient instance to use for downloading CIF files.
+        data_dir: Optional directory to look for cache of CIF files.
 
     Returns:
         A JSONLines string representing the structure and any references, or a RuntimeError if the parsing failed.
