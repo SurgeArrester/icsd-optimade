@@ -87,26 +87,24 @@ def map_cif_to_optimade(
         ]
 
     entry["attributes"]["space_group_it_number"] = cif["_space_group_it_number"]
-    entry["attributes"]["_cif_cell_formula_units_Z"] = int(cif["_cell_formula_units_Z"])
-    entry["attributes"]["_cif_cell_length_a"], u = uncertain_float(
-        cif["_cell_length_a"]
-    )
-    entry["attributes"]["_cif_cell_length_b"], u = uncertain_float(
-        cif["_cell_length_b"]
-    )
-    entry["attributes"]["_cif_cell_length_c"], u = uncertain_float(
-        cif["_cell_length_c"]
-    )
-    entry["attributes"]["_cif_cell_volume"], u = uncertain_float(cif["_cell_volume"])
-    entry["attributes"]["_cif_cell_angle_alpha"], u = uncertain_float(
-        cif["_cell_angle_alpha"]
-    )
-    entry["attributes"]["_cif_cell_angle_beta"], u = uncertain_float(
-        cif["_cell_angle_beta"]
-    )
-    entry["attributes"]["_cif_cell_angle_gamma"], u = uncertain_float(
-        cif["_cell_angle_gamma"]
-    )
+
+    cif_namespace = {
+        "_cell_formula_units_Z": int,
+        "_cell_length_a": uncertain_float,
+        "_cell_length_b": uncertain_float,
+        "_cell_length_c": uncertain_float,
+        "_cell_volume": uncertain_float,
+        "_cell_angle_alpha": uncertain_float,
+        "_cell_angle_beta": uncertain_float,
+        "_cell_angle_gamma": uncertain_float,
+    }
+    for field in cif_namespace:
+        if cif_namespace[field] is uncertain_float:
+            entry["attributes"][f"_cif{field}"], u = cif_namespace[field](cif[field])  # type: ignore
+            entry["attributes"][f"_cif{field}_uncertainty"] = u
+            entry["attributes"][f"_cif{field}_raw"] = cif[field]
+        else:
+            entry["attributes"][f"_cif{field}"] = cif_namespace[field](cif[field])  # type: ignore
 
     # TODO: extract uncertainties for other float fields, and expose them as metadata
 

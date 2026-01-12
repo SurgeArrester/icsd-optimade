@@ -53,6 +53,12 @@ def test_cif_mapper_86(icsd_client):
     assert structure.attributes._cif_cell_angle_alpha == 90
     assert structure.attributes._cif_cell_angle_beta == 90
     assert structure.attributes._cif_cell_angle_gamma == 90
+    assert structure.attributes._cif_cell_length_a_uncertainty is None
+    assert structure.attributes._cif_cell_length_b_uncertainty is None
+    assert structure.attributes._cif_cell_length_c_uncertainty is None
+    assert structure.attributes._cif_cell_angle_alpha == 90
+    assert structure.attributes._cif_cell_angle_beta == 90
+    assert structure.attributes._cif_cell_angle_gamma == 90
 
     assert structure.relationships.references.data[0].id == "115"
     assert reference.attributes.year == "1976"

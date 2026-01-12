@@ -107,4 +107,4 @@ def uncertain_float(value: str) -> tuple[float, float | None]:
         scale = 10 ** (-len(uncertainty))
         return float(base), float(uncertainty) * scale
 
-    return float(value), 0.0
+    return float(value), None
