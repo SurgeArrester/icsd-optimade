@@ -14,6 +14,7 @@ from optimade import __api_version__
 from optimade_maker.convert import _construct_entry_type_info
 
 from .client import ICSDClient
+from .fields import generate_icsd_info_endpoint, generate_provider_fields
 from .mapper import map_cif_to_optimade
 from .utils import get_cif, setup_log
 
@@ -217,14 +218,29 @@ def ingest_by_year(
                 + "\n"
             )
             final_jsonl.write(
+                json.dumps(
+                    {
+                        "data": generate_icsd_info_endpoint()["data"].model_dump(
+                            exclude_unset=True, exclude_none=False
+                        )
+                    }
+                )
+                + "\n"
+            )
+
+            final_jsonl.write(
                 _construct_entry_type_info(
-                    "structures", properties=[], provider_prefix=""
+                    "structures",
+                    properties=generate_provider_fields()["structures"],
+                    provider_prefix="",
                 ).model_dump_json()
                 + "\n"
             )
             final_jsonl.write(
                 _construct_entry_type_info(
-                    "references", properties=[], provider_prefix=""
+                    "references",
+                    properties=generate_provider_fields()["references"],
+                    provider_prefix="",
                 ).model_dump_json()
                 + "\n"
             )

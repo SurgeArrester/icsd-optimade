@@ -26,11 +26,24 @@ def test_ingest(tmpdir):
     assert (Path(tmpdir) / "data" / "test-optimade.jsonl").is_file()
 
     with open(Path(tmpdir) / "data" / "test-optimade.jsonl") as f:
-        line = f.readline()
+        _header = f.readline()
+        _info = f.readline()
+        _structure_info = f.readline()
+        _reference_info = f.readline()
         other_lines = f.readlines()
 
-    header = json.loads(line)
+    header = json.loads(_header)
     assert header["x-optimade"]
     assert header["x-optimade"]["meta"]["api_version"] == "1.2.0"
-    (json.load(line) for line in other_lines)
-    assert len(other_lines) == 696
+
+    structure_info = json.loads(_structure_info)
+    assert structure_info["type"] == "info"
+    assert structure_info["id"] == "structures"
+
+    reference_info = json.loads(_reference_info)
+    assert reference_info["type"] == "info"
+    assert reference_info["id"] == "references"
+
+    entries = [json.loads(_) for _ in other_lines]
+    assert all(entry["type"] in ("structures", "references") for entry in entries)
+    assert len(entries) == 694
