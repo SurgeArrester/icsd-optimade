@@ -157,10 +157,11 @@ def ingest_by_year(
     total_bad = 0
     total = 0
     if not combine_only:
-        with Pool(pool_size) as pool:
-            with tqdm.tqdm(
-                desc=f"Mapping ICSD to OPTIMADE ({pool_size=}",
-            ) as pbar:
+        with tqdm.tqdm(
+            desc=f"Mapping ICSD to OPTIMADE ({pool_size=}",
+            total=int(330_000),
+        ) as pbar:
+            with Pool(pool_size) as pool:
                 for total_count, bad_count in pool.imap_unordered(
                     partial(
                         handle_chunk,
@@ -174,7 +175,7 @@ def ingest_by_year(
                 ):
                     total_bad += bad_count
                     total += total_count
-                    pbar.update(total)
+                    pbar.update(total_count)
                     try:
                         pbar.set_postfix({"% bad": 100 * (total_bad / total)})
                     except ZeroDivisionError:
@@ -214,14 +215,14 @@ def ingest_by_year(
 
     with open(tmp_jsonl_path) as tmp_jsonl:
         ids_by_type: dict[str, set] = {}
-        with open(output_file, "a") as final_jsonl:
+        with open(output_file, "w") as final_jsonl:
             for line_entry in tmp_jsonl:
                 if not line_entry.strip():
                     continue
                 try:
                     json_entry = json.loads(line_entry)
                 except Exception as exc:
-                    log.error(f"Bad entry at {line_entry}: {exc}")
+                    raise RuntimeError(f"Bad entry {line_entry}: {exc}")
                 if _type := json_entry.get("type"):
                     if _type not in ids_by_type:
                         ids_by_type[_type] = set()
