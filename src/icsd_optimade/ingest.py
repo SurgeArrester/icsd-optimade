@@ -10,6 +10,7 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import tqdm
+from optimade import __api_version__
 from optimade_maker.convert import _construct_entry_type_info
 
 from .client import ICSDClient
@@ -24,6 +25,7 @@ def handle_chunk(
     num_chunks: int | None = None,
     client: ICSDClient | None = None,
     download_only: bool = False,
+    log_level: str = "INFO",
 ):
     """Handle a chunk of the ICSD database, queried by date, logging bad entries and showing a progress bar.
 
@@ -34,10 +36,11 @@ def handle_chunk(
         num_chunks: Total number of chunks being processed (for logging purposes).
         client: An optional ICSDClient instance to use for querying and downloading.
         download_only: If True, only download CIFs without mapping to OPTIMADE, caching them to disk.
+        log_level: Logging level as a string (e.g., "INFO", "DEBUG").
 
     """
 
-    log = setup_log("ingest")
+    log = setup_log(f"ingest-chunk-{os.getpid()}", log_level=log_level)
 
     if client is None:
         client = ICSDClient()
@@ -67,13 +70,15 @@ def handle_chunk(
                 total_count += 1
 
         else:
-            with open(f"data/{run_name}-optimade-{chunk[0].year}.jsonl", "w") as f:
+            with open(
+                data_dir / f"{run_name}-optimade-{chunk[0].year}.jsonl", "w"
+            ) as f:
                 log.info(
                     f"Mapping entries to OPTIMADE format and saving as {run_name}-optimade-{chunk[0].year}.jsonl"
                 )
                 for entry in entry_ids:
                     optimade = map_cif_to_optimade(int(entry), client, data_dir)
-                    if isinstance(entry, Exception):
+                    if isinstance(optimade, Exception):
                         bad_count += 1
                         log.warning("Bad entry %s: %s", entry, optimade)
                         continue
@@ -142,11 +147,12 @@ def ingest_by_year(
         data_dir=data_dir,
         client=icsd_client,
         download_only=True,
+        log_level=log_level,
     )
 
-    if not skip_download:
+    if skip_download:
         log.info("Skipping download step as per user request.")
-
+    else:
         with tqdm.tqdm(
             desc="Downloading ICSD CIFs single-threaded",
         ) as pbar:
@@ -159,7 +165,6 @@ def ingest_by_year(
     if not combine_only:
         with tqdm.tqdm(
             desc=f"Mapping ICSD to OPTIMADE ({pool_size=}",
-            total=int(330_000),
         ) as pbar:
             with Pool(pool_size) as pool:
                 for total_count, bad_count in pool.imap_unordered(
@@ -186,7 +191,7 @@ def ingest_by_year(
     tmp_dir = tempfile.TemporaryDirectory()
     tmp_jsonl_path = Path(tmp_dir.name) / output_filename
     output_file = data_dir / output_filename
-    print(f"Collecting results into {output_file}")
+    log.info(f"Collecting results into {output_file}")
 
     pattern = f"{run_name}-optimade-*.jsonl"
     input_files = sorted(
@@ -195,34 +200,39 @@ def ingest_by_year(
     )
 
     with open(tmp_jsonl_path, "w") as tmp_jsonl:
-        # Write headers
-        tmp_jsonl.write(
-            json.dumps({"x-optimade": {"meta": {"api_version": "1.1.0"}}}) + "\n"
-        )
-        tmp_jsonl.write(
-            _construct_entry_type_info(
-                "structures", properties=[], provider_prefix=""
-            ).model_dump_json()
-            + "\n"
-        )
-
+        # Decompress and combine all files into a single temporary file that needs to be deduplicated
         for filename in input_files:
             file = Path(filename)
             with open(file) as infile:
                 tmp_jsonl.write(infile.read())
             tmp_jsonl.write("\n")
-            # file.unlink()
 
+    log.info("Filtering duplicates and writing final output")
     with open(tmp_jsonl_path) as tmp_jsonl:
         ids_by_type: dict[str, set] = {}
         with open(output_file, "w") as final_jsonl:
+            # Write headers and info endpoints
+            final_jsonl.write(
+                json.dumps({"x-optimade": {"meta": {"api_version": __api_version__}}})
+                + "\n"
+            )
+            final_jsonl.write(
+                _construct_entry_type_info(
+                    "structures", properties=[], provider_prefix=""
+                ).model_dump_json()
+                + "\n"
+            )
+            final_jsonl.write(
+                _construct_entry_type_info(
+                    "references", properties=[], provider_prefix=""
+                ).model_dump_json()
+                + "\n"
+            )
+
             for line_entry in tmp_jsonl:
                 if not line_entry.strip():
                     continue
-                try:
-                    json_entry = json.loads(line_entry)
-                except Exception as exc:
-                    raise RuntimeError(f"Bad entry {line_entry}: {exc}")
+                json_entry = json.loads(line_entry)
                 if _type := json_entry.get("type"):
                     if _type not in ids_by_type:
                         ids_by_type[_type] = set()
@@ -231,10 +241,12 @@ def ingest_by_year(
                     ids_by_type[_type].add(json_entry["id"])
                     final_jsonl.write(line_entry)
 
+    # Remove the temporary directory
+    tmp_jsonl_path.unlink()
     tmp_dir.cleanup()
 
     # Final scan to remove duplicates an empty lines
-    print(
+    log.info(
         f"Combined {len(input_files)} files into {output_file} (total size of file: {os.path.getsize(output_file) / 1024**2:.1f} MB)"
     )
 

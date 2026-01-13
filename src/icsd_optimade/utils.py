@@ -18,9 +18,11 @@ def setup_log(
 
     """
     log = logging.getLogger(log_name)
-    if not log.hasHandlers():
+    if not log.handlers:
         log.handlers = []
         console_handler = logging.StreamHandler()
+        if isinstance(log_level, str):
+            log_level = log_level.upper()
         log.setLevel(log_level)
         console_handler.setFormatter(
             logging.Formatter(
