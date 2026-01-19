@@ -137,7 +137,7 @@ def map_cif_to_optimade(
     }
     reference = Reference(ref_entry)
     reference_index = cif["_citation_id"].index("primary")
-    reference.entry.attributes.title = cif["_citation_title"][reference_index].strip()
+    reference.entry.attributes.title = cif["_citation_title"].strip()
     reference.entry.attributes.year = str(cif["_citation_year"][reference_index])
     reference.entry.attributes.journal = cif["_citation_journal_full"][reference_index]
     reference.entry.attributes.authors = [
